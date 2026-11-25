@@ -1,0 +1,4 @@
+# Never upload local env files to Vercel; set env vars in the Vercel dashboard.
+.env
+.env.*
+!.env.example

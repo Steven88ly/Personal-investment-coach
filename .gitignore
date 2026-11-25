@@ -1,0 +1,18 @@
+node_modules/
+.next/
+*.log
+.DS_Store
+.vercel
+next-env.d.ts
+*.tsbuildinfo
+
+# Env files: never commit real values; the template is safe.
+.env*
+!.env.example
+
+# Private planning docs — local only.
+GITHUB_PROFILE_README.md
+HANDOFF_TO_CLAUDE.md
+PORTFOLIO.md
+PLAN.md
+DEMO.md
