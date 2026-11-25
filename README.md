@@ -32,77 +32,99 @@ moved on to Winter 2027 ideas.
   the projector. Light view only.
 - **Account tags:** TFSA / RRSP / FHSA / non-registered per holding.
 
-## Stack (default — swap for what you know)
+## Stack
 
-Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel.
-Postgres via Supabase, or SQLite + Prisma for the demo. One LLM provider
-key, server-side only, in env vars. Prices are mock, stamped with an
-"as of" date — no live-price API in the MVP.
+Next.js 15 (App Router) + TypeScript + Tailwind v4 on Vercel. No database:
+the demo portfolio is seed JSON, and prices are mock, stamped "as of
+Nov 25, 2026". The coach calls OpenAI (gpt-4o-mini) from the server only.
 
 ```
-app/            pages (dashboard, coach chat, projector)
-lib/            types.ts, money.ts (totals), portfolio.ts (value, gains,
-                allocation, projections, benchmark), coach.ts
-data/           holdings.seed.json, benchmark.seed.json,
-                transactions.seed.json (surplus view only)
-tests/          money.test.ts, portfolio.test.ts
+app/            dashboard page, /login, components/
+app/api/        coach (AI coach), login, logout
+middleware.ts   auth on every route
+lib/            portfolio.ts, money.ts (tested math), dashboard.ts (view model),
+                agent.ts (tool loop), tools.ts (6 read-only tools),
+                citations.ts, openai.ts (retry policy), coach.ts,
+                auth.ts (sessions), rate-limit.ts, coach-prompt.md
+data/           holdings, benchmark, daily (generated), transactions — all mock
+tests/          Vitest unit + render tests (`npm test`)
+evals/          live coach eval set (`npm run eval:coach`)
 ```
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env.local   # add your LLM provider key (server-side only)
-npm run dev                  # http://localhost:3000
-npm test
+cp .env.example .env.local
+# In .env.local set: DEMO_PASS (12+ chars), SESSION_SECRET (32+ random chars),
+# and optionally LLM_API_KEY (without it the coach uses the rule-based fallback).
+npm run dev          # http://localhost:3000, sign in with DEMO_USER / DEMO_PASS
+npm test             # unit + render tests
+npm run eval:coach   # live eval against the model (needs LLM_API_KEY)
 ```
 
-## Security / advice line
+## Advice line
 
-- API key server-side only — never in client code, never committed to git.
-- Auth on every route; demo account is seeded, no real users.
-- All money math server-side; tests cover totals, gains, projections.
-- Coach may only cite seeded holdings + computed aggregates. It never
-  invents a price, a return, or a holding — and never recommends buying,
-  selling, or holding a specific security. Educational only, disclaimer
-  on every answer.
-- Chat input validated, length-capped, rate-limited. No financial data
-  is logged; nothing but the user's question + aggregates reaches the model.
-- No real brokerage, no real money, no account numbers — mock data only.
-- See `SPEC.md` for the full checklist.
+The coach is educational only. It never recommends buying, selling, or
+holding a specific security; advice-shaped questions are refused before they
+reach the model, and the model is told to refuse anything that slips past.
+Every answer carries a disclaimer, every figure in it is checked against the
+tool results it came from, and every price is labelled mock.
 
-## Threat model (short version — this is the SPEC.md checkbox)
+## Threat model
 
-Assets: the LLM API key, the demo user's (mock) holdings, the coach's
-system prompt.
-- **Key leak** (key in client bundle, git history, or logs) → keys live
-  server-side only, in env vars; `.gitignore` covers `.env*`; a
-  pre-commit secrets scan (OWASP `secrets-scan`) runs before every push.
-- **Prompt injection via chat input** (user tries to make the coach
-  reveal the prompt or recommend a trade) → input is validated and
-  length-capped; the coach only cites tool results; the advice pre-check
-  routes advice-shaped questions to the refusal template; the system
-  prompt is never returned to the client.
-- **Ungrounded answers** (model invents a price or holding) → the
-  citation check after every answer (see AGENT.md §5); the model only
-  ever sees tool results, never raw files.
-- **Abuse / cost** (someone spams the coach endpoint) → auth on every
-  route, per-user rate limit, 5-step max on the agent loop.
-- **Out of scope for the demo:** real brokerage credentials (mock data
-  only — see REAL_DATA.md for how real connections change this), DDoS,
-  multi-user isolation.
+**What's worth protecting.** The OpenAI key and the credit behind it; the
+session secret and demo password (together they gate everything); the
+integrity of what the coach says (no invented numbers, no advice). The
+portfolio itself is mock data with no real accounts, money, or personal
+details, so data theft has little to steal by design.
+
+**Trust boundaries.** Browser → Next.js server (middleware + route
+handlers) → OpenAI. Secrets live only in `.env.local` (git-ignored) and in
+Vercel's encrypted environment variables.
+
+| Threat | Control | Evidence |
+|---|---|---|
+| API key leaks via the browser bundle, git, logs, or errors | Read only in `app/api/coach`; no `NEXT_PUBLIC_` vars; `.env*` git- and Vercel-ignored; client errors never carry the key | `tests/openai.test.ts`; bundle grep and full git-history scan: clean |
+| Anyone with the URL uses the app or drains credit | Sign-in required on every page and API (middleware), checked again inside `/api/coach`; 10 questions/min per user+IP; daily cap on live model calls (`COACH_DAILY_LIMIT`, default 300), then the labelled fallback | `tests/middleware.test.ts`, `tests/coach-route.test.ts` |
+| Password guessing | 5 sign-in attempts/min per IP; constant-time credential compare; sign-in fails closed if the password is missing, under 12 chars, or the old template default | `tests/auth.test.ts`, `tests/login-route.test.ts` |
+| Forged or stolen session | HMAC-SHA256-signed cookie, 8 h expiry, `HttpOnly; Secure; SameSite=Lax`; secret is 32+ chars and differs per environment; rotating it signs everyone out | `tests/auth.test.ts` |
+| Cross-site request forgery | `SameSite=Lax` cookie; `/api/coach` accepts `application/json` only (a cross-site form can't send it); CSP `form-action 'self'` | `tests/coach-route.test.ts` |
+| Open redirect after sign-in | `next` must be a same-site path, else `/` | `tests/auth.test.ts` |
+| XSS through questions or answers | React escapes all text; no raw-HTML rendering anywhere; HTML stripped from questions; CSP limits scripts, styles, and connections to this origin | `tests/coach.test.ts` |
+| Clickjacking | `frame-ancestors 'none'` and `X-Frame-Options: DENY` | `tests/login-page.test.tsx` |
+| Oversized or malformed input | Question 1–500 chars; body ≤ 2 KB (413); bad JSON → 400 | `tests/coach-route.test.ts` |
+| Prompt injection: user talks the coach into advice | Three layers: advice pre-check before the model; system prompt rules; the model has only six **read-only** tools, so no prompt can make it act | `tests/agent.test.ts`; live evals Q5/Q6 (pre-check) and Q5b/Q6b (model refuses paraphrases) |
+| Ungrounded answers: model invents a price or return | Tools return pre-computed, tested figures; every $ and % in an answer must match a tool result or the user's question, else one regeneration, then the figure is removed and the answer says so | `tests/citations.test.ts`, `tests/agent.test.ts` |
+| Runaway agent loop or retry storm | Max 5 steps; a tool failing twice ends the loop; backoff 1 s/2 s/4 s then give up; never retries 400/401/403 | `tests/agent.test.ts`, `tests/openai.test.ts` |
+| Financial data in logs | Questions and answers are never logged; the only log lines are a model-failure class/status and "sign-in not configured" | code review: two `console.warn` calls, both value-free |
+| Build tampering or outage via third-party fetches | Fonts self-hosted (no build-time Google Fonts fetch) | `tests/fonts.test.ts` |
+
+**Accepted risks (known, deliberate for a one-user demo).**
+- Rate limits and the daily cap are in memory, so each Vercel instance keeps
+  its own count. A real deployment would use a shared store (e.g. Redis).
+- The CSP allows `'unsafe-inline'` scripts, which Next.js's App Router needs
+  without per-request nonces. Every other directive is `'self'` or `'none'`.
+- One shared demo account: anyone given the password has full access to the
+  mock data and the coach. Rotate `DEMO_PASS` and `SESSION_SECRET` after demos.
+- The system prompt is in this public repo, so it isn't a secret. Nothing in
+  it is sensitive.
+- `npm audit` flags the PostCSS bundled inside Next.js 15. It only runs at
+  build time on this app's own CSS; the fix is the Next 16 major upgrade.
+- No pre-commit secret-scanning hook yet. Scans were run by hand before each
+  security-relevant commit; adding `gitleaks` as a hook is the next step.
+
+**Out of scope for the demo.** Real brokerage connections (see
+`REAL_DATA.md` for how they would change this model: encrypted token storage,
+read-only scopes, revocation), multiple users and per-user data isolation,
+and volumetric DDoS (left to Vercel's platform protection).
 
 ## Files
 
 - `SPEC.md` — product spec: features, data model, AI grounding + advice rules.
+- `DESIGN.md` — the design system and page structure.
 - `AGENT.md` — agent design: loop, six tool schemas, retry policy, eval set.
 - `NEWS.md` — v2 news-aware health digest (sources, advice line, seam).
-- `REAL_DATA.md` — real broker data via SnapTrade/Plaid, post-Thursday.
-- `data/news.seed.json` — sample news digest for the mock Thursday view.
-- `tests/portfolio.test.ts`, `tests/money.test.ts`,
-  `tests/fallback-coach.test.ts` — Vitest; `npm test` green.
-- `data/holdings.seed.json` — mock portfolio (VEQT-anchored, 6 holdings + cash).
-- `data/benchmark.seed.json` — monthly portfolio vs VEQT, Jun–Nov 2026.
-- `data/transactions.seed.json` — mock spending, surplus view only.
+- `REAL_DATA.md` — real broker data via SnapTrade/Plaid, after the demo.
 - `lib/coach-prompt.md` — the system prompt the coach runs under.
-- `lib/portfolio.ts` — portfolio math (value, gains, allocation, projections).
+- `docs/superpowers/` — design spec and build plan for the scrub chart and pie.
