@@ -21,7 +21,8 @@
     "lint": "next lint",
     "start": "next start",
     "test": "vitest run",
-    "generate:daily": "node scripts/generate-daily.mjs"
+    "generate:daily": "node scripts/generate-daily.mjs",
+    "eval:coach": "vitest run --config vitest.eval.config.ts"
   },
   "version": "0.1.0"
 }

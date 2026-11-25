@@ -213,6 +213,13 @@ describe("contribution projector", () => {
   });
 });
 
+describe("coach panel on the dashboard", () => {
+  it("sits after the projector", () => {
+    const coach = html.indexOf('aria-labelledby="coach-heading"');
+    expect(coach).toBeGreaterThan(html.indexOf('aria-labelledby="projector-heading"'));
+  });
+});
+
 describe("diversification check", () => {
   const panelText = plain(sectionFor("checks-heading"));
 

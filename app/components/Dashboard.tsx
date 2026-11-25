@@ -3,6 +3,7 @@ import { AccountsPanel } from "./AccountsPanel";
 import { AllocationPanel } from "./AllocationPanel";
 import { BenchmarkPanel } from "./BenchmarkPanel";
 import { ChecksPanel } from "./ChecksPanel";
+import { CoachPanel } from "./CoachPanel";
 import { EmptyPortfolio } from "./EmptyPortfolio";
 import { Header } from "./Header";
 import { PortfolioHero } from "./PortfolioHero";
@@ -29,6 +30,7 @@ export function Dashboard({ view }: { view: DashboardView }) {
           <AllocationPanel byAssetClass={view.byAssetClass} byHolding={view.byHolding} total={view.totals.value} />
           {view.benchmark && <BenchmarkPanel benchmark={view.benchmark} />}
           <ProjectorPanel surplusLine={view.surplus?.line ?? null} />
+          <CoachPanel />
         </>
       )}
     </main>

@@ -169,6 +169,14 @@ const ADVICE_RE =
 const TICKER_RE = /\b(VEQT|XEQT|VFV|AAPL|MSFT|SHOP)\b/i;
 
 /**
+ * Pre-check layer (AGENT.md §5): advice-shaped questions go straight to the
+ * refusal template. Shared by the live coach and this fallback.
+ */
+export function isAdviceQuestion(question: string): boolean {
+  return ADVICE_RE.test(question.trim());
+}
+
+/**
  * Answer one of the eval questions (AGENT.md §7) deterministically.
  * Returns null only when the question matches none of the known patterns
  * — the caller should then reply with the "can't answer from the data"
