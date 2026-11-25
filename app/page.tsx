@@ -1,8 +1,9 @@
 import benchmarkSeed from "../data/benchmark.seed.json";
 import dailySeed from "../data/daily.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
+import transactionsSeed from "../data/transactions.seed.json";
 import { buildDashboard } from "../lib/dashboard";
-import type { BenchmarkPoint, DailyPoint, Holding } from "../lib/types";
+import type { BenchmarkPoint, DailyPoint, Holding, Transaction } from "../lib/types";
 import { Dashboard } from "./components/Dashboard";
 
 /** `?portfolio=empty` shows the empty state (DESIGN.md "States"). */
@@ -15,7 +16,12 @@ export default async function HomePage({
   const holdings = portfolio === "empty" ? [] : (holdingsSeed as Holding[]);
   return (
     <Dashboard
-      view={buildDashboard(holdings, benchmarkSeed as BenchmarkPoint[], dailySeed as DailyPoint[])}
+      view={buildDashboard(
+        holdings,
+        benchmarkSeed as BenchmarkPoint[],
+        dailySeed as DailyPoint[],
+        transactionsSeed as Transaction[]
+      )}
     />
   );
 }

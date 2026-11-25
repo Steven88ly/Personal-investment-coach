@@ -12,6 +12,8 @@ import {
   allocation,
   allocationByAssetClass,
   benchmarkComparison,
+  diversificationChecks,
+  type DiversificationCheck,
   holdingGainCents,
   holdingGainPct,
   holdingValueCents,
@@ -20,7 +22,10 @@ import {
   portfolioGainPct,
   portfolioValueCents,
 } from "./portfolio";
-import type { AccountType, AssetClass, BenchmarkPoint, DailyPoint, Holding } from "./types";
+import { accountSummaries, type AccountSummary } from "./accounts";
+import { latestCompleteMonth, monthlySurplus } from "./money";
+import { PROJECTOR_DEFAULTS, projectionView } from "./projector";
+import type { AccountType, AssetClass, BenchmarkPoint, DailyPoint, Holding, Transaction } from "./types";
 
 /**
  * The dashboard's view model: every number the page shows, computed and
@@ -86,6 +91,10 @@ export interface DashboardView {
   benchmark: BenchmarkView | null;
   /** Generated mock daily series for the scrub hero; empty when there are no holdings. */
   daily: DailyPoint[];
+  checks: DiversificationCheck[];
+  accounts: AccountSummary[];
+  /** One-line investable surplus for the latest full month; null without transactions. */
+  surplus: { line: string; surplusCents: number } | null;
 }
 
 const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
@@ -99,6 +108,26 @@ const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+
+function surplusLine(txns: Transaction[], asOf: string): DashboardView["surplus"] {
+  const month = latestCompleteMonth(asOf);
+  if (!txns.some((t) => t.date.startsWith(month))) return null;
+  const { incomeCents, spentCents, surplusCents } = monthlySurplus(txns, month);
+  const name = MONTH_NAMES[Number(month.split("-")[1]) - 1];
+  const flows = `(${formatMoney(incomeCents)} in, ${formatMoney(spentCents)} out)`;
+  if (surplusCents <= 0) {
+    return {
+      line: `You spent ${formatMoney(-surplusCents)} more than you earned in ${name} ${flows}, so nothing was left to invest.`,
+      surplusCents,
+    };
+  }
+  const { monthly, ratePct, years } = PROJECTOR_DEFAULTS;
+  const projected = projectionView(monthly * 100, ratePct, years).futureValue;
+  return {
+    line: `You had ${formatMoney(surplusCents)} left in ${name} ${flows}. At $${monthly} a month and ${ratePct}%, that pace of saving grows to ${projected} in ${years} years.`,
+    surplusCents,
+  };
+}
 
 function benchmarkHeadline(pp: number, firstMonth: string): string {
   const since = MONTH_NAMES[Number(firstMonth.split("-")[1]) - 1];
@@ -160,8 +189,10 @@ function toBenchmark(series: BenchmarkPoint[]): BenchmarkView | null {
 export function buildDashboard(
   holdings: Holding[],
   series: BenchmarkPoint[],
-  daily: DailyPoint[] = []
+  daily: DailyPoint[] = [],
+  txns: Transaction[] = []
 ): DashboardView {
+  const asOfIso = holdings[0]?.priceAsOf ?? SEED_AS_OF;
   const totalCents = portfolioValueCents(holdings);
   const gainCents = portfolioGainCents(holdings);
   const cashCents = holdings
@@ -173,7 +204,7 @@ export function buildDashboard(
 
   return {
     isEmpty: holdings.length === 0,
-    asOf: formatAsOf(holdings[0]?.priceAsOf ?? SEED_AS_OF),
+    asOf: formatAsOf(asOfIso),
     totals: {
       value: formatMoney(totalCents),
       gain: formatSignedMoney(gainCents),
@@ -199,5 +230,8 @@ export function buildDashboard(
       .map((h) => ({ ...h, pct: formatPct(h.share) })),
     benchmark: toBenchmark(series),
     daily: holdings.length === 0 ? [] : daily,
+    checks: diversificationChecks(holdings),
+    accounts: accountSummaries(holdings),
+    surplus: surplusLine(txns, asOfIso),
   };
 }

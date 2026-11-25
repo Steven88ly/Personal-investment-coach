@@ -42,3 +42,22 @@ export function formatCAD(cents: number): string {
     currency: "CAD",
   });
 }
+
+/** The last full calendar month before an as-of date: "2026-11-25" → "2026-10". */
+export function latestCompleteMonth(asOf: string): string {
+  const [y, m] = asOf.split("-").map(Number);
+  const prevY = m === 1 ? y - 1 : y;
+  const prevM = m === 1 ? 12 : m - 1;
+  return `${prevY}-${String(prevM).padStart(2, "0")}`;
+}
+
+/** Income minus spending for one month (YYYY-MM). spentCents is positive. */
+export function monthlySurplus(
+  txns: Transaction[],
+  month: string
+): { incomeCents: number; spentCents: number; surplusCents: number } {
+  const inMonth = txns.filter((t) => t.date.startsWith(month));
+  const incomeCents = totalIncome(inMonth);
+  const spentCents = Math.abs(totalSpent(inMonth));
+  return { incomeCents, spentCents, surplusCents: incomeCents - spentCents };
+}

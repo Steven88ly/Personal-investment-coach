@@ -4,7 +4,8 @@ import { AllocationDonut } from "../app/components/AllocationDonut";
 import { Dashboard } from "../app/components/Dashboard";
 import { SLICE_COLORS } from "../app/components/sliceColors";
 import { buildDashboard } from "../lib/dashboard";
-import type { BenchmarkPoint, DailyPoint, Holding } from "../lib/types";
+import type { BenchmarkPoint, DailyPoint, Holding, Transaction } from "../lib/types";
+import transactionsSeed from "../data/transactions.seed.json";
 import dailySeed from "../data/daily.seed.json";
 import benchmarkSeed from "../data/benchmark.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
@@ -12,7 +13,8 @@ import holdingsSeed from "../data/holdings.seed.json";
 const holdings = holdingsSeed as Holding[];
 const benchmark = benchmarkSeed as BenchmarkPoint[];
 const daily = dailySeed as DailyPoint[];
-const html = renderToStaticMarkup(<Dashboard view={buildDashboard(holdings, benchmark, daily)} />);
+const txns = transactionsSeed as Transaction[];
+const html = renderToStaticMarkup(<Dashboard view={buildDashboard(holdings, benchmark, daily, txns)} />);
 
 /** Text content with tags stripped and entities for apostrophes decoded. */
 const text = html
@@ -154,6 +156,89 @@ describe("benchmark panel", () => {
   it("offers the numbers as a table, one row per month", () => {
     const tbody = html.match(/<table[^>]*aria-label="Portfolio vs VEQT by month"[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? "";
     expect(tbody.match(/<tr/g)).toHaveLength(6);
+  });
+});
+
+/** The markup of the <section> whose heading has this id. */
+function sectionFor(headingId: string): string {
+  const open = html.indexOf(`aria-labelledby="${headingId}"`);
+  if (open === -1) return "";
+  const start = html.lastIndexOf("<section", open);
+  return html.slice(start, html.indexOf("</section>", open) + "</section>".length);
+}
+const plain = (markup: string) => markup.replace(/<[^>]+>/g, " ").replace(/&#x27;|&#39;/g, "'").replace(/\s+/g, " ");
+
+describe("contribution projector", () => {
+  const panel = sectionFor("projector-heading");
+  const panelText = plain(panel);
+
+  it("is anchored so the surplus line can link to it", () => {
+    expect(panel).toContain('id="projector"');
+  });
+
+  it("defaults to $200/mo, 7%, 10 years: $34,616.96", () => {
+    expect(panelText).toContain("$34,616.96");
+    expect(panelText).toMatch(/10 years/);
+  });
+
+  it("splits deposits from growth", () => {
+    expect(panelText).toContain("$24,000.00");
+    expect(panelText).toContain("$10,616.96");
+  });
+
+  it("shows the 5-year mark", () => {
+    expect(panelText).toContain("$14,318.58");
+  });
+
+  it("shows the formula with the numbers plugged in", () => {
+    expect(panelText).toContain("FV = P × ((1 + r)ⁿ − 1) ÷ r");
+    expect(panelText).toContain("r = 7% ÷ 12 = 0.5833% a month");
+    expect(panelText).toContain("n = 10 years × 12 = 120 months");
+  });
+
+  it("has a labelled number field and slider for each input", () => {
+    for (const [id, name] of [["projector-monthly", "Monthly contribution"], ["projector-rate", "Annual return"], ["projector-years", "Years"]]) {
+      expect(panel).toMatch(new RegExp(`<label[^>]*for="${id}"[^>]*>${name}`));
+      expect(panel).toMatch(new RegExp(`<input[^>]*id="${id}"[^>]*type="number"|<input[^>]*type="number"[^>]*id="${id}"`));
+      expect(panel).toMatch(new RegExp(`<input[^>]*type="range"[^>]*aria-label="${name}[^"]*"`));
+    }
+  });
+
+  it("says the return is an assumption", () => {
+    expect(panelText).toMatch(/assumed return, not a prediction/i);
+  });
+
+  it("carries the investable-surplus line", () => {
+    expect(panelText).toContain("You had $588.48 left in October");
+  });
+});
+
+describe("diversification check", () => {
+  const panelText = plain(sectionFor("checks-heading"));
+
+  it("lists each check with the actual figure", () => {
+    expect(panelText).toContain("Largest: MSFT at 12.5%");
+    expect(panelText).toContain("Largest: MSFT at 37.9%");
+    expect(panelText).toContain("Cash is 7.8% of your portfolio");
+  });
+
+  it("explains that ETFs are exempt", () => {
+    expect(panelText).toMatch(/ETFs aren't counted/);
+  });
+});
+
+describe("accounts", () => {
+  const panelText = plain(sectionFor("accounts-heading"));
+
+  it("one line per account with its value and plain-language meaning", () => {
+    expect(panelText).toMatch(/TFSA Tax-Free Savings Account \$10,922\.00/);
+    expect(panelText).toMatch(/RRSP Registered Retirement Savings Plan \$2,280\.00/);
+    expect(panelText).toMatch(/non-registered Non-registered account \$5,980\.00/);
+    expect(panelText).toContain("aren't taxed");
+  });
+
+  it("says the tags are not tax advice", () => {
+    expect(panelText).toMatch(/informational, not tax advice/i);
   });
 });
 

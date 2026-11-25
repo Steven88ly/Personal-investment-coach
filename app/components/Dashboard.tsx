@@ -1,9 +1,12 @@
 import type { DashboardView } from "../../lib/dashboard";
+import { AccountsPanel } from "./AccountsPanel";
 import { AllocationPanel } from "./AllocationPanel";
 import { BenchmarkPanel } from "./BenchmarkPanel";
+import { ChecksPanel } from "./ChecksPanel";
 import { EmptyPortfolio } from "./EmptyPortfolio";
 import { Header } from "./Header";
 import { PortfolioHero } from "./PortfolioHero";
+import { ProjectorPanel } from "./ProjectorPanel";
 import { HoldingsTable } from "./HoldingsTable";
 import { SummaryStrip } from "./SummaryStrip";
 
@@ -19,8 +22,13 @@ export function Dashboard({ view }: { view: DashboardView }) {
           {hasHero && <PortfolioHero daily={view.daily} />}
           <SummaryStrip totals={view.totals} showValue={!hasHero} />
           <HoldingsTable rows={view.rows} asOf={view.asOf} />
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+            <AccountsPanel accounts={view.accounts} />
+            <ChecksPanel checks={view.checks} />
+          </div>
           <AllocationPanel byAssetClass={view.byAssetClass} byHolding={view.byHolding} total={view.totals.value} />
           {view.benchmark && <BenchmarkPanel benchmark={view.benchmark} />}
+          <ProjectorPanel surplusLine={view.surplus?.line ?? null} />
         </>
       )}
     </main>

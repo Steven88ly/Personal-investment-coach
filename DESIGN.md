@@ -24,13 +24,20 @@ no component library — Tailwind + the tokens below.
    Account tag (TFSA / RRSP / FHSA / non-registered) as a small pill
    next to the ticker. Zebra rows, right-aligned numbers, tabular
    numerals so columns line up.
-5. **Benchmark panel** — line chart, portfolio vs VEQT, Jun–Nov 2026,
+5. **Accounts + Diversification check** (side by side on wide screens) —
+   one plain-language line per account held (TFSA / RRSP / FHSA /
+   non-registered) with its value and holdings, marked "informational, not
+   tax advice"; and the three SPEC concentration checks, each with a
+   Clear / Flag label and its actual figure. ETFs exempt, said on screen.
+6. **Benchmark panel** — line chart, portfolio vs VEQT, Jun–Nov 2026,
    with one line underneath: "Portfolio +11.5% vs VEQT +6.3% (+5.2pp)".
-6. **Projector panel** — three inputs (monthly $, annual return %,
+7. **Projector panel** — three inputs (monthly $, annual return %,
    years) with sliders + number fields, output in large type
    ($34,617 in 10 years at $200/mo, 7%), the contributions/growth split
    underneath, and the formula shown in small text. Never hide the math.
-7. **Coach panel** — chat at the bottom, or a right-hand column on
+   Opens with the investable-surplus line (latest full month's income
+   minus spending, linked to the $200/mo, 7%, 10y case).
+8. **Coach panel** — chat at the bottom, or a right-hand column on
    wide screens. Input + send button, answers with a "Sources" list
    under each one (the citations), the disclaimer under every answer,
    and a visible label when the answer came from the rule-based

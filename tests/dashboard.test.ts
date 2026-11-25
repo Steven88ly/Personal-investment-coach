@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildDashboard } from "../lib/dashboard";
-import type { BenchmarkPoint, DailyPoint, Holding } from "../lib/types";
+import type { BenchmarkPoint, DailyPoint, Holding, Transaction } from "../lib/types";
+import transactionsSeed from "../data/transactions.seed.json";
 import dailySeed from "../data/daily.seed.json";
 import benchmarkSeed from "../data/benchmark.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
@@ -116,6 +117,40 @@ describe("dashboard view model (daily series)", () => {
 
   it("has no daily series for an empty portfolio", () => {
     expect(buildDashboard([], benchmark, daily).daily).toEqual([]);
+  });
+});
+
+describe("dashboard view model (checks, accounts, surplus)", () => {
+  const txns = transactionsSeed as Transaction[];
+  const full = buildDashboard(holdings, benchmark, [], txns);
+
+  it("carries the three diversification checks", () => {
+    expect(full.checks.map((c) => c.id)).toEqual(["single-stock", "stock-share", "cash"]);
+  });
+
+  it("carries one summary per account held", () => {
+    expect(full.accounts.map((a) => a.account)).toEqual(["TFSA", "RRSP", "non-registered"]);
+  });
+
+  it("surplus line: October's leftover, linked to the projector's $200/mo, 7%, 10y case", () => {
+    expect(full.surplus).toEqual({
+      line: "You had $588.48 left in October ($1,850.00 in, $1,261.52 out). At $200 a month and 7%, that pace of saving grows to $34,616.96 in 10 years.",
+      surplusCents: 58848,
+    });
+  });
+
+  it("a month where spending beat income says so plainly", () => {
+    const overspent: Transaction[] = [
+      { id: "a", date: "2026-10-01", merchant: "Pay", amountCents: 100000, category: "income", source: "seed" },
+      { id: "b", date: "2026-10-02", merchant: "Rent", amountCents: -120000, category: "other", source: "seed" },
+    ];
+    expect(buildDashboard(holdings, benchmark, [], overspent).surplus?.line).toBe(
+      "You spent $200.00 more than you earned in October ($1,000.00 in, $1,200.00 out), so nothing was left to invest."
+    );
+  });
+
+  it("no transactions for the month means no surplus line", () => {
+    expect(buildDashboard(holdings, benchmark).surplus).toBeNull();
   });
 });
 
