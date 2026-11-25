@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* DESIGN.md tokens. Colour lives in the data; the chrome stays neutral. */
+@theme {
+  --color-linen: #faf8f5;
+  --color-paper: #fcfcfc;
+  --color-stone: #e4e2e1;
+  --color-ink: #32302f;
+  --color-pebble: #686664;
+  --color-charcoal: #09090a;
+  --color-gain: #15803d;
+  --color-loss: #b91c1c;
+
+  --font-display: var(--font-newsreader), Georgia, serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-linen);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

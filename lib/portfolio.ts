@@ -1,4 +1,4 @@
-import type { BenchmarkPoint, Holding } from "./types";
+import type { AssetClass, BenchmarkPoint, Holding } from "./types";
 
 /**
  * All portfolio math lives here, server-side, and is covered by tests.
@@ -49,6 +49,19 @@ export function allocation(holdings: Holding[]): Record<string, number> {
   if (total === 0) return out;
   for (const h of holdings) {
     out[h.ticker] = holdingValueCents(h) / total;
+  }
+  return out;
+}
+
+/** Share of total portfolio value per asset class, as 0–1 fractions. */
+export function allocationByAssetClass(
+  holdings: Holding[]
+): Partial<Record<AssetClass, number>> {
+  const total = portfolioValueCents(holdings);
+  const out: Partial<Record<AssetClass, number>> = {};
+  if (total === 0) return out;
+  for (const h of holdings) {
+    out[h.assetClass] = (out[h.assetClass] ?? 0) + holdingValueCents(h) / total;
   }
   return out;
 }
@@ -143,4 +156,21 @@ export function benchmarkComparison(series: BenchmarkPoint[]): {
     veqtReturnPct,
     outperformancePctPoints: (portfolioReturnPct - veqtReturnPct) * 100,
   };
+}
+
+/**
+ * Both series as % change since the first month, so a portfolio value and
+ * a share price can share one axis (no dual-axis chart).
+ */
+export function indexedBenchmark(
+  series: BenchmarkPoint[]
+): { month: string; portfolioPct: number; veqtPct: number }[] {
+  if (series.length === 0) return [];
+  const first = series[0];
+  if (first.portfolioValueCents === 0 || first.veqtPriceCents === 0) return [];
+  return series.map((p) => ({
+    month: p.month,
+    portfolioPct: (p.portfolioValueCents - first.portfolioValueCents) / first.portfolioValueCents,
+    veqtPct: (p.veqtPriceCents - first.veqtPriceCents) / first.veqtPriceCents,
+  }));
 }

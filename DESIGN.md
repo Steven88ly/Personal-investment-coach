@@ -9,21 +9,28 @@ no component library — Tailwind + the tokens below.
 
 1. **Header** — "FinCoach" wordmark, a `Mock data — as of Nov 25, 2026`
    badge (always visible), and the disclaimer line in small text.
-2. **Portfolio summary strip** — three big numbers in a row: total value
-   ($19,182), total gain (+$1,572 / +8.9%), cash ($1,500). No chart
-   above the fold; the numbers are the product.
-3. **Holdings table** — ticker, name, shares, avg cost, current price,
+2. **Portfolio hero** (Wealthsimple-style, added Nov 25) — the value in
+   large type ($19,182.00), the change in value over the range in $ and %
+   (green up / red down / grey flat), and a daily line chart under it with
+   1M / 3M / All pills. Drag (mouse or touch) or arrow keys scrub day by
+   day; the number, change, and date follow. Say "change in value", never
+   "gain": the line includes money added. Daily values between month-ends
+   are generated mock data (`data/daily.seed.json`) and say so under the
+   chart; the coach never cites them.
+3. **Portfolio summary strip** — total gain (+$1,572 / +8.9%) and cash
+   ($1,500). Shows total value too when there is no daily series.
+4. **Holdings table** — ticker, name, shares, avg cost, current price,
    value, gain/loss ($ and %). One row per holding, 7 rows incl. cash.
    Account tag (TFSA / RRSP / FHSA / non-registered) as a small pill
    next to the ticker. Zebra rows, right-aligned numbers, tabular
    numerals so columns line up.
-4. **Benchmark panel** — line chart, portfolio vs VEQT, Jun–Nov 2026,
+5. **Benchmark panel** — line chart, portfolio vs VEQT, Jun–Nov 2026,
    with one line underneath: "Portfolio +11.5% vs VEQT +6.3% (+5.2pp)".
-5. **Projector panel** — three inputs (monthly $, annual return %,
+6. **Projector panel** — three inputs (monthly $, annual return %,
    years) with sliders + number fields, output in large type
    ($34,617 in 10 years at $200/mo, 7%), the contributions/growth split
    underneath, and the formula shown in small text. Never hide the math.
-6. **Coach panel** — chat at the bottom, or a right-hand column on
+7. **Coach panel** — chat at the bottom, or a right-hand column on
    wide screens. Input + send button, answers with a "Sources" list
    under each one (the citations), the disclaimer under every answer,
    and a visible label when the answer came from the rule-based
@@ -61,9 +68,16 @@ reads better to a reviewer than a pixel copy of a company's brand.
   1024px centred. Cards: 12px radius, 1px hairline border, no shadows.
   Whitespace carries the hierarchy — don't add borders or dividers to
   compensate.
-- **Charts:** one line chart only (benchmark). Two lines, labelled
-  directly, no legend box. No pie chart — the allocation table already
-  says it, with exact percentages.
+- **Charts:** three, hand-built SVG, no chart library.
+  - Hero: one daily line, coloured by the range's direction; dotted
+    baseline at the range's start value; no axes.
+  - Allocation: a donut of the three asset classes only (ETFs cyan
+    #0891b2, stocks violet #7c3aed, cash gold #c2870a — validated, fixed
+    per class), total in the hole, the exact table beside it. No pie for
+    individual holdings: too many slices.
+  - Benchmark: two lines (portfolio blue #1d4ed8, VEQT ochre #b45309,
+    dashed), labelled directly, no legend box.
+  - Green and red are reserved for gains and losses, never a series.
 
 ## States (all must exist — a demo with no error state looks unfinished)
 

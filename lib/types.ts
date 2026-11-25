@@ -56,3 +56,10 @@ export interface Goal {
   savedCents: number;
   deadline: string; // YYYY-MM-DD
 }
+
+/** One trading day of the generated mock series (data/daily.seed.json). */
+export interface DailyPoint {
+  date: string; // YYYY-MM-DD
+  /** Total portfolio value, CAD cents. Generated mock data. */
+  valueCents: number;
+}
