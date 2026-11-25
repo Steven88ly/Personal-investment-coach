@@ -7,9 +7,19 @@ export function Header({ asOf }: { asOf: string }) {
           An educational tool, not financial advice. Every figure here is illustrative mock data.
         </p>
       </div>
-      <p className="rounded-full border border-stone bg-paper px-3 py-1 text-[13px] font-medium">
-        Mock data — as of {asOf}
-      </p>
+      <div className="flex items-center gap-3">
+        <p className="rounded-full border border-stone bg-paper px-3 py-1 text-[13px] font-medium">
+          Mock data — as of {asOf}
+        </p>
+        <form action="/api/logout" method="post">
+          <button
+            type="submit"
+            className="rounded-full border border-ink/70 px-3 py-1 text-[13px] transition-colors duration-150 hover:bg-stone/60"
+          >
+            Sign out
+          </button>
+        </form>
+      </div>
     </header>
   );
 }

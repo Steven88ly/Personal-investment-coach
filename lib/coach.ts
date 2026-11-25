@@ -53,24 +53,7 @@ export function validateQuestion(raw: unknown): Validated {
   return { ok: true, question };
 }
 
-/** Sliding-window limiter, in memory (one demo user; per-instance on Vercel). */
-export function createRateLimiter(opts: { limit: number; windowMs: number; now?: () => number }) {
-  const { limit, windowMs, now = Date.now } = opts;
-  const hits = new Map<string, number[]>();
-  return {
-    allow(key: string): boolean {
-      const t = now();
-      const recent = (hits.get(key) ?? []).filter((at) => t - at < windowMs);
-      if (recent.length >= limit) {
-        hits.set(key, recent);
-        return false;
-      }
-      recent.push(t);
-      hits.set(key, recent);
-      return true;
-    },
-  };
-}
+export { createRateLimiter } from "./rate-limit";
 
 /** Last MAX_HISTORY messages per user; older turns are dropped, not summarised. */
 export function createHistoryStore() {
