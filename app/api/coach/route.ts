@@ -1,10 +1,11 @@
 import benchmarkSeed from "../../../data/benchmark.seed.json";
 import holdingsSeed from "../../../data/holdings.seed.json";
+import newsSeed from "../../../data/news.seed.json";
 import { requestUser } from "../../../lib/auth";
 import { answerQuestion, createHistoryStore, validateQuestion } from "../../../lib/coach";
 import { createOpenAIModel } from "../../../lib/openai";
 import { clientIp, createDailyBudget, createRateLimiter } from "../../../lib/rate-limit";
-import type { BenchmarkPoint, Holding } from "../../../lib/types";
+import type { BenchmarkPoint, Holding, NewsItem } from "../../../lib/types";
 
 /**
  * HTTP boundary for the coach (AGENT.md §2). The browser sends
@@ -21,7 +22,11 @@ export const dynamic = "force-dynamic";
 const MAX_BODY_BYTES = 2048;
 const DAILY_LIMIT = Number.parseInt(process.env.COACH_DAILY_LIMIT ?? "", 10);
 
-const ctx = { holdings: holdingsSeed as Holding[], benchmark: benchmarkSeed as BenchmarkPoint[] };
+const ctx = {
+  holdings: holdingsSeed as Holding[],
+  benchmark: benchmarkSeed as BenchmarkPoint[],
+  news: newsSeed as NewsItem[],
+};
 const limiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
 const budget = createDailyBudget({ limit: Number.isFinite(DAILY_LIMIT) && DAILY_LIMIT >= 0 ? DAILY_LIMIT : 300 });
 const history = createHistoryStore();

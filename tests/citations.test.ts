@@ -36,6 +36,33 @@ describe("checkCitations", () => {
   });
 });
 
+describe("citations from news stories", () => {
+  it("cite a story by its title and date, not by quoting its long text", () => {
+    const news = [
+      {
+        tool: "getMarketBrief",
+        result: {
+          stories: [
+            {
+              title: "Broad global selloff hits equities as AI trade unwinds",
+              source: "Market brief — Nov 20, 2026 selloff (verified)",
+              date: "Nov 20, 2026",
+              summary: "VEQT fell to about $57.50 midday, down ~2.2% from the $58.82 prior close and ~7.9% over five sessions.",
+              touches: "Touches VEQT, VFV, XEQT: 59.2% of your portfolio ($11,352.00).",
+            },
+          ],
+        },
+      },
+    ];
+    const r = checkCitations("VEQT fell to about $57.50, down 2.2%. This touches 59.2% ($11,352.00).", news, "");
+    expect(r.uncited).toEqual([]);
+    expect(r.citations).toEqual([
+      "Market brief: Broad global selloff hits equities as AI trade unwinds (Market brief — Nov 20, 2026 selloff (verified), Nov 20, 2026)",
+      "Market brief: Touches VEQT, VFV, XEQT: 59.2% of your portfolio ($11,352.00).",
+    ]);
+  });
+});
+
 describe("stripUncited", () => {
   it("removes each unverified figure and says so", () => {
     expect(stripUncited("You have $50,000.00 and gained 12%.", ["$50,000.00", "12%"])).toBe(

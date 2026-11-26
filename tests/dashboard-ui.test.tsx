@@ -6,6 +6,9 @@ import { SLICE_COLORS } from "../app/components/sliceColors";
 import { buildDashboard } from "../lib/dashboard";
 import type { BenchmarkPoint, DailyPoint, Holding, Transaction } from "../lib/types";
 import transactionsSeed from "../data/transactions.seed.json";
+import newsSeed from "../data/news.seed.json";
+import { containsNonNeutral } from "../lib/news";
+import type { NewsItem } from "../lib/types";
 import dailySeed from "../data/daily.seed.json";
 import benchmarkSeed from "../data/benchmark.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
@@ -14,7 +17,8 @@ const holdings = holdingsSeed as Holding[];
 const benchmark = benchmarkSeed as BenchmarkPoint[];
 const daily = dailySeed as DailyPoint[];
 const txns = transactionsSeed as Transaction[];
-const html = renderToStaticMarkup(<Dashboard view={buildDashboard(holdings, benchmark, daily, txns)} />);
+const news = newsSeed as NewsItem[];
+const html = renderToStaticMarkup(<Dashboard view={buildDashboard(holdings, benchmark, daily, txns, news)} />);
 
 /** Text content with tags stripped and entities for apostrophes decoded. */
 const text = html
@@ -213,6 +217,64 @@ describe("contribution projector", () => {
   });
 });
 
+describe("neutral news panel", () => {
+  const panel = sectionFor("news-heading");
+  const panelText = plain(panel);
+
+  it("sits after the holdings table and before allocation", () => {
+    const at = (id: string) => html.indexOf(`aria-labelledby="${id}"`);
+    expect(at("news-heading")).toBeGreaterThan(at("holdings-heading"));
+    expect(at("news-heading")).toBeLessThan(at("allocation-heading"));
+    expect(panelText).toContain("This week for your portfolio");
+  });
+
+  it("states its as-of date and that sample stories aren't real", () => {
+    expect(panelText).toContain("News as of Nov 25, 2026. Sample stories are illustrative, not real news.");
+  });
+
+  it("market brief: story, source, date, and the holdings it touches", () => {
+    expect(panelText).toContain("Broad global selloff hits equities as AI trade unwinds");
+    expect(panelText).toContain("Market brief — Nov 20, 2026 selloff (verified)");
+    expect(panelText).toContain("Nov 20, 2026");
+    expect(panelText).toContain("Touches VEQT, VFV, XEQT: 59.2% of your portfolio ($11,352.00).");
+  });
+
+  it("a card per holding with news, largest first, each with its exposure", () => {
+    const aapl = panelText.indexOf("AAPL is 10.8% of your portfolio ($2,080.00), non-registered account.");
+    const shop = panelText.indexOf("SHOP is 9.6% of your portfolio ($1,850.00), TFSA account.");
+    expect(aapl).toBeGreaterThan(-1);
+    expect(shop).toBeGreaterThan(aapl);
+  });
+
+  it("labels every sample story and the sample upcoming date", () => {
+    expect(panel.match(/>Sample</g)!.length).toBeGreaterThanOrEqual(3);
+    expect(panelText).toMatch(/Coming up Jan 28, 2027 Quarterly results expected Sample/);
+  });
+
+  it("names the holdings with no news", () => {
+    expect(panelText).toContain("No stories this period for MSFT.");
+  });
+
+  it("tags each story with its sample sentiment, word and source shown, colour by tone", () => {
+    const tags = [...panel.matchAll(/<span[^>]*data-sentiment="([a-z]+)"[^>]*class="([^"]*)"[^>]*>([\s\S]*?)<\/span><\/span>|<span[^>]*class="([^"]*)"[^>]*data-sentiment="([a-z]+)"[^>]*>([\s\S]*?)<\/span><\/span>/g)];
+    const found = tags.map((m) => ({ tone: m[1] ?? m[5], cls: m[2] ?? m[4], text: plain(m[3] ?? m[6]).trim() }));
+    expect(found.map((t) => t.text)).toEqual([
+      "Bearish Sample sentiment",
+      "Neutral Sample sentiment",
+      "Somewhat-Bullish Sample sentiment",
+    ]);
+    expect(found.map((t) => t.tone)).toEqual(["bearish", "neutral", "bullish"]);
+    expect(found[0].cls).toContain("text-loss");
+    expect(found[1].cls).toContain("text-pebble");
+    expect(found[2].cls).toContain("text-gain");
+  });
+
+  it("uses no evaluative or directional words outside the attributed sentiment tags", () => {
+    const withoutTags = panel.replace(/<span[^>]*data-sentiment="[a-z]+"[\s\S]*?<\/span><\/span>/g, "");
+    expect(containsNonNeutral(plain(withoutTags))).toBeNull();
+  });
+});
+
 describe("coach panel on the dashboard", () => {
   it("sits after the projector", () => {
     const coach = html.indexOf('aria-labelledby="coach-heading"');
@@ -260,6 +322,11 @@ describe("empty portfolio", () => {
   it("still shows the mock-data badge and never renders NaN", () => {
     expect(empty).toContain("Mock data — as of Nov 25, 2026");
     expect(empty).not.toContain("NaN");
+  });
+
+  it("draws no news panel", () => {
+    const withNews = renderToStaticMarkup(<Dashboard view={buildDashboard([], benchmark, daily, txns, news)} />);
+    expect(withNews).not.toContain('aria-labelledby="news-heading"');
   });
 
   it("draws no donut and no hero", () => {

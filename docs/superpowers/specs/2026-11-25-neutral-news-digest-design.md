@@ -89,3 +89,19 @@ Rejected:
 
 Exact seed wording (factual, sourced, sample-labelled); card styling within
 DESIGN.md tokens; the banned-word list's final contents; DESIGN.md update.
+
+## Amendment (2026-11-25): sentiment tags
+
+The owner asked for bullish/bearish ratings, colour-coded. Live sentiment
+(Alpha Vantage NEWS_SENTIMENT) was tested and is premium-only, so ratings are
+**sample data** for now.
+
+- Each story carries `sentiment: { label, source }`. Labels mirror Alpha
+  Vantage's scale: Bearish, Somewhat-Bearish, Neutral, Somewhat-Bullish,
+  Bullish. Source is "Sample sentiment" until a paid feed replaces it.
+- The panel shows a tag with the label word and its source: red for the two
+  bearish labels, green for the two bullish, grey for Neutral. The word is
+  always printed, so colour is never the only signal.
+- The tag is attributed data, not FinCoach's voice: key points, exposure
+  lines, and coach answers stay under the neutrality guard. The coach tools
+  do not return sentiment, so chat stays neutral.

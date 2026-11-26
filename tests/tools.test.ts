@@ -1,19 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { TOOL_DEFS, executeTool, validateArgs } from "../lib/tools";
-import type { BenchmarkPoint, Holding } from "../lib/types";
+import type { BenchmarkPoint, Holding, NewsItem } from "../lib/types";
+import newsSeed from "../data/news.seed.json";
 import benchmarkSeed from "../data/benchmark.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
 
-const ctx = { holdings: holdingsSeed as Holding[], benchmark: benchmarkSeed as BenchmarkPoint[] };
+const ctx = { holdings: holdingsSeed as Holding[], benchmark: benchmarkSeed as BenchmarkPoint[], news: newsSeed as NewsItem[] };
 const empty = { holdings: [] as Holding[], benchmark: benchmarkSeed as BenchmarkPoint[] };
 
 describe("tool allowlist (AGENT.md §3)", () => {
-  it("exposes exactly the six read-only tools, each with a description", () => {
+  it("exposes exactly the eight read-only tools, each with a description", () => {
     expect(TOOL_DEFS.map((t) => t.name).sort()).toEqual([
       "getAllocation",
       "getBenchmarkComparison",
       "getDiversificationFlags",
+      "getHoldingNews",
       "getHoldings",
+      "getMarketBrief",
       "getPortfolioSummary",
       "projectContributions",
     ]);
@@ -43,7 +46,7 @@ describe("validateArgs", () => {
 
   it("rejects an unknown tool, and says why", () => {
     const r = validateArgs("placeTrade", {});
-    expect(r).toEqual({ ok: false, error: 'Unknown tool "placeTrade". Available: getPortfolioSummary, getHoldings, getAllocation, getBenchmarkComparison, getDiversificationFlags, projectContributions.' });
+    expect(r).toEqual({ ok: false, error: 'Unknown tool "placeTrade". Available: getPortfolioSummary, getHoldings, getAllocation, getBenchmarkComparison, getDiversificationFlags, projectContributions, getMarketBrief, getHoldingNews.' });
   });
 });
 
@@ -117,5 +120,58 @@ describe("executeTool on an empty portfolio", () => {
     const summary = executeTool("getPortfolioSummary", {}, empty);
     expect(summary).toEqual({ holdingsCount: 0, note: "No holdings in this portfolio." });
     expect(JSON.stringify(executeTool("getAllocation", {}, empty))).not.toContain("NaN");
+  });
+});
+
+describe("news tools (neutral digest)", () => {
+  it("getMarketBrief: the Nov 20 story with source, date, and which holdings it touches", () => {
+    const r = executeTool("getMarketBrief", {}, ctx) as { asOf: string; stories: Record<string, unknown>[] };
+    expect(r.asOf).toBe("Nov 25, 2026");
+    expect(r.stories).toHaveLength(1);
+    expect(r.stories[0]).toMatchObject({
+      title: "Broad global selloff hits equities as AI trade unwinds",
+      source: "Market brief — Nov 20, 2026 selloff (verified)",
+      date: "Nov 20, 2026",
+      sample: false,
+      touches: "Touches VEQT, VFV, XEQT: 59.2% of your portfolio ($11,352.00).",
+    });
+  });
+
+  it("getHoldingNews: exposure plus the holding's stories", () => {
+    const r = executeTool("getHoldingNews", { ticker: "AAPL" }, ctx) as { exposure: string; stories: { title: string; sample: boolean }[] };
+    expect(r.exposure).toBe("AAPL is 10.8% of your portfolio ($2,080.00), non-registered account.");
+    expect(r.stories[0]).toMatchObject({ title: "[Sample] AAPL heads into earnings season", sample: true });
+  });
+
+  it("getHoldingNews on an unheld ticker says so and returns no stories", () => {
+    expect(executeTool("getHoldingNews", { ticker: "TSLA" }, ctx)).toEqual({
+      ticker: "TSLA",
+      held: false,
+      note: "TSLA is not in this portfolio.",
+    });
+  });
+
+  it("a held ticker with no stories says there are none", () => {
+    expect(executeTool("getHoldingNews", { ticker: "MSFT" }, ctx)).toMatchObject({
+      ticker: "MSFT",
+      stories: [],
+      note: "No stories this period for MSFT.",
+    });
+  });
+
+  it("never returns sentiment to the coach, so chat stays neutral", () => {
+    expect(JSON.stringify(executeTool("getMarketBrief", {}, ctx))).not.toMatch(/sentiment|bearish|bullish/i);
+    expect(JSON.stringify(executeTool("getHoldingNews", { ticker: "SHOP" }, ctx))).not.toMatch(/sentiment|bearish|bullish/i);
+  });
+
+  it("validates the ticker format", () => {
+    expect(validateArgs("getHoldingNews", { ticker: "AAPL" }).ok).toBe(true);
+    expect(validateArgs("getHoldingNews", { ticker: "aapl" }).ok).toBe(false);
+    expect(validateArgs("getHoldingNews", { ticker: "A".repeat(11) }).ok).toBe(false);
+    expect(validateArgs("getHoldingNews", {}).ok).toBe(false);
+  });
+
+  it("with no news configured, the brief is empty, not an error", () => {
+    expect(executeTool("getMarketBrief", {}, { holdings: ctx.holdings, benchmark: ctx.benchmark })).toMatchObject({ stories: [] });
   });
 });

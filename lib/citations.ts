@@ -37,6 +37,8 @@ const TOOL_LABELS: Record<string, string> = {
   getBenchmarkComparison: "Benchmark vs VEQT",
   getDiversificationFlags: "Diversification checks",
   projectContributions: "Projection",
+  getMarketBrief: "Market brief",
+  getHoldingNews: "Holding news",
 };
 
 const MONEY = /[+−-]?\$\s?\d[\d,]*(?:\.\d+)?/g;
@@ -64,19 +66,53 @@ function figuresIn(text: string): Figure[] {
 
 const humanize = (key: string) => key.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
 
-function collect(tool: string, node: unknown, key: string, ticker: string | null, out: SourceFigure[]) {
+/** Story text (summary, key points) is cited by the story, not quoted whole. */
+const STORY_TEXT_KEYS = new Set(["title", "summary", "keyPoints"]);
+
+function collect(
+  tool: string,
+  node: unknown,
+  key: string,
+  ticker: string | null,
+  out: SourceFigure[],
+  story: string | null = null
+) {
+  const toolLabel = TOOL_LABELS[tool] ?? tool;
   if (typeof node === "string") {
     for (const f of figuresIn(node)) {
       const who = ticker ? `${ticker} ` : "";
-      out.push({ kind: f.kind, value: f.value, label: `${TOOL_LABELS[tool] ?? tool}: ${who}${humanize(key)} ${node}` });
+      const field = node.toLowerCase().startsWith(humanize(key)) ? "" : `${humanize(key)} `;
+      const label = story && STORY_TEXT_KEYS.has(key) ? `${toolLabel}: ${story}` : `${toolLabel}: ${who}${field}${node}`;
+      out.push({ kind: f.kind, value: f.value, label });
     }
   } else if (Array.isArray(node)) {
-    for (const item of node) collect(tool, item, key, ticker, out);
+    for (const item of node) collect(tool, item, key, ticker, out, story);
   } else if (node && typeof node === "object") {
     const obj = node as Record<string, unknown>;
     const t = typeof obj.ticker === "string" ? obj.ticker : ticker;
-    for (const [k, v] of Object.entries(obj)) collect(tool, v, k, t, out);
+    const s = storyLabel(obj) ?? story;
+    for (const [k, v] of Object.entries(obj)) collect(tool, v, k, t, out, s);
   }
+}
+
+/** "Title (Source, Date)" for a story-shaped object, else null. */
+function storyLabel(obj: Record<string, unknown>): string | null {
+  if (typeof obj.title !== "string" || typeof obj.date !== "string") return null;
+  return typeof obj.source === "string" ? `${obj.title} (${obj.source}, ${obj.date})` : `${obj.title} (${obj.date})`;
+}
+
+/** One citation per story a news tool returned, whether or not the answer quoted its figures. */
+export function storyCitations(sources: ToolSource[]): string[] {
+  const out: string[] = [];
+  for (const s of sources) {
+    const stories = (s.result as { stories?: Record<string, unknown>[] } | null)?.stories ?? [];
+    for (const story of stories) {
+      const label = storyLabel(story);
+      const full = label && `${TOOL_LABELS[s.tool] ?? s.tool}: ${label}`;
+      if (full && !out.includes(full)) out.push(full);
+    }
+  }
+  return out;
 }
 
 const matches = (f: Figure, value: number) => Number(value.toFixed(f.decimals)) === f.value;

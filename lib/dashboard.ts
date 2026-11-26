@@ -24,8 +24,9 @@ import {
 } from "./portfolio";
 import { accountSummaries, type AccountSummary } from "./accounts";
 import { latestCompleteMonth, monthlySurplus } from "./money";
+import { buildDigest, type Digest } from "./news";
 import { PROJECTOR_DEFAULTS, projectionView } from "./projector";
-import type { AccountType, AssetClass, BenchmarkPoint, DailyPoint, Holding, Transaction } from "./types";
+import type { AccountType, AssetClass, BenchmarkPoint, DailyPoint, Holding, NewsItem, Transaction } from "./types";
 
 /**
  * The dashboard's view model: every number the page shows, computed and
@@ -95,6 +96,8 @@ export interface DashboardView {
   accounts: AccountSummary[];
   /** One-line investable surplus for the latest full month; null without transactions. */
   surplus: { line: string; surplusCents: number } | null;
+  /** Neutral news digest; null without stories or holdings. */
+  digest: Digest | null;
 }
 
 const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
@@ -190,7 +193,8 @@ export function buildDashboard(
   holdings: Holding[],
   series: BenchmarkPoint[],
   daily: DailyPoint[] = [],
-  txns: Transaction[] = []
+  txns: Transaction[] = [],
+  news: NewsItem[] = []
 ): DashboardView {
   const asOfIso = holdings[0]?.priceAsOf ?? SEED_AS_OF;
   const totalCents = portfolioValueCents(holdings);
@@ -233,5 +237,6 @@ export function buildDashboard(
     checks: diversificationChecks(holdings),
     accounts: accountSummaries(holdings),
     surplus: surplusLine(txns, asOfIso),
+    digest: news.length > 0 ? buildDigest(holdings, news) : null,
   };
 }

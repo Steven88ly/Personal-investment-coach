@@ -14,7 +14,8 @@ import {
   portfolioValueCents,
   projectContributions,
 } from "./portfolio";
-import type { BenchmarkPoint, Holding } from "./types";
+import { buildDigest, holdingExposure, type StoryView } from "./news";
+import type { BenchmarkPoint, Holding, NewsItem } from "./types";
 
 /**
  * The coach's six tools (AGENT.md §3). All read-only and deterministic:
@@ -26,11 +27,14 @@ import type { BenchmarkPoint, Holding } from "./types";
 export interface ToolContext {
   holdings: Holding[];
   benchmark: BenchmarkPoint[];
+  /** Neutral news digest stories; absent means no news configured. */
+  news?: NewsItem[];
 }
 
 type Prop =
   | { type: "integer" | "number"; minimum: number; maximum: number; description: string }
-  | { type: "string"; enum: string[]; description: string };
+  | { type: "string"; enum: string[]; description: string }
+  | { type: "string"; pattern: string; maxLength: number; description: string };
 
 export interface ToolDef {
   name: string;
@@ -93,6 +97,25 @@ export const TOOL_DEFS: ToolDef[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "getMarketBrief",
+    description:
+      "This period's market-wide news stories: title, source, date, factual key points, and which of the user's holdings each touches with their combined share and value. Use for 'what's moving my portfolio' or market news questions.",
+    parameters: noParams,
+  },
+  {
+    name: "getHoldingNews",
+    description:
+      "News stories about one ticker: title, source, date, factual key points, any upcoming date, and the user's exposure to that holding. Says so if the ticker isn't held. Use for news about a specific holding.",
+    parameters: {
+      type: "object",
+      properties: {
+        ticker: { type: "string", pattern: "^[A-Z][A-Z.]{0,9}$", maxLength: 10, description: "Ticker in capitals, e.g. AAPL." },
+      },
+      required: ["ticker"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 const BY_NAME = new Map(TOOL_DEFS.map((t) => [t.name, t]));
@@ -120,8 +143,12 @@ export function validateArgs(name: string, args: unknown): Validation {
     const v = obj[key];
     if (v === undefined) continue;
     if (prop.type === "string") {
-      if (typeof v !== "string" || !prop.enum.includes(v)) {
-        return { ok: false, error: `${name}: "${key}" must be one of ${prop.enum.join(", ")}.` };
+      if ("enum" in prop) {
+        if (typeof v !== "string" || !prop.enum.includes(v)) {
+          return { ok: false, error: `${name}: "${key}" must be one of ${prop.enum.join(", ")}.` };
+        }
+      } else if (typeof v !== "string" || v.length > prop.maxLength || !new RegExp(prop.pattern).test(v)) {
+        return { ok: false, error: `${name}: "${key}" must match ${prop.pattern}.` };
       }
       continue;
     }
@@ -231,9 +258,29 @@ export function executeTool(name: string, args: Record<string, unknown>, ctx: To
         formula: "FV = P × ((1 + r)^n − 1) / r, r = annual rate / 12, n = years × 12",
       };
     }
+    case "getMarketBrief": {
+      const digest = buildDigest(holdings, ctx.news ?? []);
+      if (!digest) return NO_HOLDINGS;
+      return { asOf: digest.asOf, stories: digest.market.map(withoutSentiment) };
+    }
+    case "getHoldingNews": {
+      const ticker = args.ticker as string;
+      const exposure = holdingExposure(ticker, holdings);
+      if (!exposure) return { ticker, held: false, note: `${ticker} is not in this portfolio.` };
+      const card = buildDigest(holdings, ctx.news ?? [])?.cards.find((c) => c.ticker === ticker);
+      return card
+        ? { ticker, exposure, stories: card.stories.map(withoutSentiment) }
+        : { ticker, exposure, stories: [], note: `No stories this period for ${ticker}.` };
+    }
     default:
       throw new Error(`Unknown tool "${name}"`);
   }
+}
+
+/** Sentiment is panel-only attributed data; the coach never sees it, so chat stays neutral. */
+function withoutSentiment(story: StoryView): Omit<StoryView, "sentiment"> {
+  const { sentiment: _omit, ...rest } = story;
+  return rest;
 }
 
 /** "2026-06" → "Jun 2026". */

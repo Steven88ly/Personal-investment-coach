@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { MAX_HISTORY, runCoach, type CallModel, type ChatMessage, type CoachResult } from "./agent";
+import { MAX_HISTORY, NEUTRALITY_LINE, runCoach, type CallModel, type ChatMessage, type CoachResult } from "./agent";
 import { answerFallback, cannotAnswerFallback, isAdviceQuestion } from "./fallback-coach";
 import type { ToolContext } from "./tools";
 
@@ -34,6 +34,13 @@ Prices are mock data: say so when quoting one. Keep answers under 120 words.
 Write plain text: no Markdown, no bold, no headings, no bullet symbols.
 If the question isn't about the user's portfolio or investing concepts, or the tools can't answer it,
 say plainly that you can't answer it from their portfolio data, and list what you can answer.
+For news: cite the source and date of every story you mention (name the source as given, e.g.
+"Market brief — Nov 20, 2026 selloff"), and say "sample" for sample stories.
+Say a story "touches" holdings; never that it affects or impacts them. Say "you own", not "you hold".
+If asked whether news is good or bad for the user, answer with exactly this sentence, then the facts:
+"${NEUTRALITY_LINE}"
+State what happened and the user's exposure (from the tools) only. Never say whether news is good or bad
+for the user, never predict its effect, and never suggest an action because of it.
 The disclaimer is added for you; don't write one.`;
 }
 

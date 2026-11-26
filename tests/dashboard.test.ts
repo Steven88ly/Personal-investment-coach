@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildDashboard } from "../lib/dashboard";
 import type { BenchmarkPoint, DailyPoint, Holding, Transaction } from "../lib/types";
 import transactionsSeed from "../data/transactions.seed.json";
+import newsSeed from "../data/news.seed.json";
+import type { NewsItem } from "../lib/types";
 import dailySeed from "../data/daily.seed.json";
 import benchmarkSeed from "../data/benchmark.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
@@ -151,6 +153,21 @@ describe("dashboard view model (checks, accounts, surplus)", () => {
 
   it("no transactions for the month means no surplus line", () => {
     expect(buildDashboard(holdings, benchmark).surplus).toBeNull();
+  });
+});
+
+describe("dashboard view model (news digest)", () => {
+  const news = newsSeed as NewsItem[];
+
+  it("carries the digest when stories are supplied", () => {
+    const d = buildDashboard(holdings, benchmark, [], [], news).digest!;
+    expect(d.market.map((s) => s.id)).toEqual(["news-2026-11-20-selloff"]);
+    expect(d.cards.map((c) => c.ticker)).toEqual(["AAPL", "SHOP"]);
+  });
+
+  it("no stories, or no holdings, means no digest", () => {
+    expect(buildDashboard(holdings, benchmark).digest).toBeNull();
+    expect(buildDashboard([], benchmark, [], [], news).digest).toBeNull();
   });
 });
 

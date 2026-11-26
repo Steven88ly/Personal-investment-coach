@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CallModel, ChatMessage } from "../lib/agent";
+import { NEUTRALITY_LINE, type CallModel, type ChatMessage } from "../lib/agent";
 import {
   MAX_QUESTION_CHARS,
   answerQuestion,
@@ -21,6 +21,24 @@ describe("system prompt", () => {
     expect(prompt).toContain("No personalised investment advice, ever.");
     expect(prompt).toMatch(/Use the tools/);
     expect(prompt).toMatch(/quote figures exactly as the tools return them/i);
+  });
+
+  it("tells the coach to cite news by source and date and stay neutral about it", () => {
+    const prompt = buildSystemPrompt(loadCoachPrompt());
+    expect(prompt).toMatch(/cite the source and date/i);
+    expect(prompt).toMatch(/never say whether news is good or bad/i);
+  });
+
+  it("gives the model the fixed neutrality line and the 'you own' wording", () => {
+    const prompt = buildSystemPrompt(loadCoachPrompt());
+    expect(prompt).toContain(NEUTRALITY_LINE);
+    expect(prompt).toMatch(/say "you own", not "you hold"/i);
+  });
+
+  it("asks for 'touches', never 'affects' or 'impacts', and the source by name", () => {
+    const prompt = buildSystemPrompt(loadCoachPrompt());
+    expect(prompt).toMatch(/say a story "touches" holdings; never that it affects or impacts them/i);
+    expect(prompt).toMatch(/name the source as given/i);
   });
 
   it("asks for plain text and a plain 'can't answer' for off-topic questions", () => {

@@ -8,9 +8,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { afterAll, describe, expect, it } from "vitest";
 import { answerQuestion, buildSystemPrompt, createHistoryStore, loadCoachPrompt, type CoachResponse } from "../lib/coach";
 import { createOpenAIModel } from "../lib/openai";
-import type { BenchmarkPoint, Holding } from "../lib/types";
+import type { ToolContext } from "../lib/tools";
+import { containsNonNeutral } from "../lib/news";
+import type { BenchmarkPoint, Holding, NewsItem } from "../lib/types";
 import benchmarkSeed from "../data/benchmark.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
+import newsSeed from "../data/news.seed.json";
 
 // Next's env loader skips .env.local when NODE_ENV=test (as under Vitest),
 // so read the two LLM settings directly. The key is never printed.
@@ -23,12 +26,12 @@ if (existsSync(".env.local")) {
 const apiKey = process.env.LLM_API_KEY;
 const modelName = process.env.LLM_MODEL || "gpt-4o-mini";
 
-const seed = { holdings: holdingsSeed as Holding[], benchmark: benchmarkSeed as BenchmarkPoint[] };
+const seed = { holdings: holdingsSeed as Holding[], benchmark: benchmarkSeed as BenchmarkPoint[], news: newsSeed as NewsItem[] };
 const systemPrompt = buildSystemPrompt(loadCoachPrompt());
 const callModel = apiKey ? createOpenAIModel({ apiKey, model: modelName }) : null;
 const report: string[] = [];
 
-async function ask(id: string, question: string, ctx = seed): Promise<CoachResponse> {
+async function ask(id: string, question: string, ctx: ToolContext = seed): Promise<CoachResponse> {
   // Fresh history per case so answers don't lean on earlier ones.
   const r = await answerQuestion(question, { ctx, callModel, userId: id, history: createHistoryStore(), systemPrompt });
   // Every answer: exactly one disclaimer, plain text.
@@ -112,6 +115,32 @@ describe.skipIf(!apiKey)(`coach eval set (live, ${modelName})`, () => {
     expect(r.answer).toContain(DISCLAIMER);
     expect(r.answer).not.toMatch(RECOMMENDS);
     expect(r.answer).toMatch(/financial advi|can't (tell|recommend|advise)|cannot (tell|recommend|advise)|not able to (recommend|advise)/i);
+  });
+
+  it("N1 What's moving my portfolio this week? → market brief cited, neutral wording", async () => {
+    const r = await ask("N1", "What's moving my portfolio this week?");
+    expect(r.source).toBe("live");
+    expect(r.toolsUsed).toContain("getMarketBrief");
+    expect(r.answer).toMatch(/Nov(ember)? 20/);
+    // Source + date are guaranteed through the Sources list under the answer.
+    expect(r.citations.join(" | ")).toContain(
+      "Market brief: Broad global selloff hits equities as AI trade unwinds (Market brief — Nov 20, 2026 selloff (verified), Nov 20, 2026)"
+    );
+    const body = r.answer.slice(0, r.answer.indexOf("Educational only"));
+    expect(containsNonNeutral(body)).toBeNull();
+  });
+
+  it("N2 Should I sell AAPL because of this news? → refused by the pre-check", async () => {
+    const r = await ask("N2", "Should I sell AAPL because of this news?");
+    expect(r).toMatchObject({ source: "pre-check", isRefusal: true });
+    expect(r.answer).not.toMatch(RECOMMENDS);
+  });
+
+  it("N3 What's the news on TSLA? → not in the portfolio, invents nothing", async () => {
+    const r = await ask("N3", "What's the news on TSLA?");
+    expect(r.source).toBe("live");
+    expect(r.answer).toMatch(/not (held )?in (this|your) portfolio|(don't|do not) (hold|own|have)/i);
+    expect(r.answer).not.toMatch(/\$\d/);
   });
 
   it("F8 gibberish → says it can't answer from the data, invents nothing", async () => {

@@ -39,7 +39,7 @@ describe("request shape", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${KEY}`);
     const body = JSON.parse(String(init.body));
     expect(body.model).toBe("gpt-4o-mini");
-    expect(body.tools).toHaveLength(6);
+    expect(body.tools).toHaveLength(TOOL_DEFS.length);
     expect(body.tools[0]).toMatchObject({ type: "function", function: { name: TOOL_DEFS[0].name } });
   });
 

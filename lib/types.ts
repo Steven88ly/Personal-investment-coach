@@ -63,3 +63,27 @@ export interface DailyPoint {
   /** Total portfolio value, CAD cents. Generated mock data. */
   valueCents: number;
 }
+
+/**
+ * A news story for the neutral digest (data/news.seed.json now, a live feed
+ * later). Facts only: no sentiment, no recommendation.
+ */
+export interface NewsItem {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  publishedAt: string; // YYYY-MM-DD
+  /** Tickers the story is about (held or not). */
+  tickers: string[];
+  /** true = illustrative stand-in, shown with a "Sample" label. */
+  sample: boolean;
+  scope: "market" | "holding";
+  /** 1–3 factual lines. */
+  keyPoints: string[];
+  upcoming?: { date: string; label: string; sample: boolean };
+  /** Attributed sentiment rating (Alpha Vantage's scale). Shown in the panel only. */
+  sentiment?: { label: SentimentLabel; source: string };
+}
+
+export type SentimentLabel = "Bearish" | "Somewhat-Bearish" | "Neutral" | "Somewhat-Bullish" | "Bullish";

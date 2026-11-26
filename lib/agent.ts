@@ -1,5 +1,6 @@
-import { checkCitations, stripUncited, type ToolSource } from "./citations";
+import { checkCitations, storyCitations, stripUncited, type ToolSource } from "./citations";
 import { FALLBACK_DISCLAIMER, answerFallback, isAdviceQuestion } from "./fallback-coach";
+import { containsNonNeutralAnswer, type StoryView } from "./news";
 import { TOOL_DEFS, executeTool, validateArgs, type ToolContext, type ToolDef } from "./tools";
 
 /**
@@ -13,6 +14,10 @@ import { TOOL_DEFS, executeTool, validateArgs, type ToolContext, type ToolDef } 
 export const MAX_STEPS = 5;
 export const MAX_HISTORY = 10;
 export const COACH_DISCLAIMER = FALLBACK_DISCLAIMER;
+/** What the coach says (and the news fallback opens with) when asked to judge news. */
+export const NEUTRALITY_LINE = "I report what happened and your exposure; I don't judge news or suggest actions.";
+/** Appended whenever an answer drew on a sample story, so sample content is never unlabelled. */
+export const SAMPLE_NOTE = "Stories marked sample are illustrative, not real news.";
 
 export interface ToolCallMessage {
   id: string;
@@ -152,14 +157,74 @@ async function finalize(
     if (check.uncited.length > 0) answer = stripUncited(answer, check.uncited);
   }
 
+  // Neutral-wording check for news answers: one rewrite, then a summary
+  // assembled from the stories themselves (neutral by construction).
+  const usedNews = run.toolsUsed.some((t) => NEWS_TOOLS.has(t));
+  if (usedNews) {
+    const term = containsNonNeutralAnswer(answer);
+    if (term) {
+      const retry = await run.callModel(
+        [
+          ...run.messages,
+          { role: "assistant", content: answer },
+          {
+            role: "user",
+            content: `Rewrite neutrally. Remove evaluative or impact words (found: "${term}"). State what happened, the source and date, and which holdings each story touches. No judgments or predictions.`,
+          },
+        ],
+        { tools: null }
+      );
+      const rewritten = tidy(retry.text ?? "");
+      if (containsNonNeutralAnswer(rewritten)) {
+        const summary = neutralNewsSummary(run.sources);
+        // Asked to judge the news ("is this good for me?"): say why we won't, then the facts.
+        answer = containsNonNeutralAnswer(run.question) ? `${NEUTRALITY_LINE}\n\n${summary}` : summary;
+      } else {
+        answer = rewritten;
+      }
+      check = checkCitations(answer, run.sources, run.question);
+      if (check.uncited.length > 0) answer = stripUncited(answer, check.uncited);
+    }
+  }
+
+  if (usedNews && hasSampleStory(run.sources) && !answer.includes(SAMPLE_NOTE)) {
+    answer = `${answer}\n\n${SAMPLE_NOTE}`;
+  }
+  const citations = usedNews ? [...new Set([...storyCitations(run.sources), ...check.citations])] : check.citations;
+
   // The harness owns the disclaimer: exactly one, always the official text.
   return {
     answer: `${answer}\n\n${COACH_DISCLAIMER}`,
-    citations: check.citations,
+    citations,
     toolsUsed: run.toolsUsed,
     source: "live",
     isRefusal: false,
   };
+}
+
+const NEWS_TOOLS = new Set(["getMarketBrief", "getHoldingNews"]);
+
+const hasSampleStory = (sources: ToolSource[]) =>
+  sources.some(
+    (s) => NEWS_TOOLS.has(s.tool) && ((s.result as { stories?: StoryView[] }).stories ?? []).some((x) => x.sample)
+  );
+
+/** Facts straight from the news tool results: title, source, date, key points, exposure. */
+function neutralNewsSummary(sources: ToolSource[]): string {
+  const lines: string[] = [];
+  for (const s of sources) {
+    if (!NEWS_TOOLS.has(s.tool)) continue;
+    const r = s.result as { stories?: StoryView[]; exposure?: string; note?: string };
+    if (r.exposure) lines.push(r.exposure);
+    for (const story of r.stories ?? []) {
+      const tag = story.sample ? "Sample: " : "";
+      lines.push(
+        [`${tag}${story.title} (${story.source}, ${story.date}).`, ...story.keyPoints, story.touches ?? ""].filter(Boolean).join(" ")
+      );
+    }
+    if (r.note) lines.push(r.note);
+  }
+  return lines.length > 0 ? lines.join("\n\n") : "There are no stories for this question in your portfolio's news.";
 }
 
 /** Plain text for the chat: no Markdown emphasis, no model-written disclaimer. */

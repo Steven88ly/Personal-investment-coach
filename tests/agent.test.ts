@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { COACH_DISCLAIMER, MAX_STEPS, runCoach, type CallModel, type ChatMessage, type ModelReply } from "../lib/agent";
-import type { BenchmarkPoint, Holding } from "../lib/types";
+import {
+  COACH_DISCLAIMER,
+  MAX_STEPS,
+  NEUTRALITY_LINE,
+  SAMPLE_NOTE,
+  runCoach,
+  type CallModel,
+  type ChatMessage,
+  type ModelReply,
+} from "../lib/agent";
+import { containsNonNeutral } from "../lib/news";
+import type { BenchmarkPoint, Holding, NewsItem } from "../lib/types";
+import newsSeed from "../data/news.seed.json";
 import benchmarkSeed from "../data/benchmark.seed.json";
 import holdingsSeed from "../data/holdings.seed.json";
 
@@ -163,6 +174,86 @@ describe("retry policy for tool calls (AGENT.md §4)", () => {
     const toolMsgs = calls[1].messages.filter((m) => m.role === "tool");
     expect(toolMsgs.map((m) => m.tool_call_id)).toEqual(["a", "b"]);
     expect(r.toolsUsed).toEqual(["getPortfolioSummary", "getBenchmarkComparison"]);
+  });
+});
+
+describe("neutral-wording check on news answers", () => {
+  const newsCtx = { ...ctx, news: newsSeed as NewsItem[] };
+  const runNews = (q: string, model: CallModel) => runCoach(q, { callModel: model, ctx: newsCtx, systemPrompt: "SYSTEM" });
+
+  it("a news answer with impact language is regenerated once, naming the words to drop", async () => {
+    const { model, calls } = scripted(
+      call("getMarketBrief", {}),
+      text("A selloff affected your portfolio."),
+      text("A broad selloff on Nov 20 touches VEQT, VFV and XEQT.")
+    );
+    const r = await runNews("What's moving my portfolio?", model);
+    expect(calls).toHaveLength(3);
+    expect(calls[2].messages.at(-1)!.content).toMatch(/affected/);
+    expect(r.answer).toContain("touches VEQT, VFV and XEQT");
+  });
+
+  it("still not neutral after one retry → replaced by a neutral summary built from the stories", async () => {
+    const { model } = scripted(
+      call("getMarketBrief", {}),
+      text("Bad news: the selloff impacted you."),
+      text("Still a worrying selloff.")
+    );
+    const r = await runNews("What's moving my portfolio?", model);
+    const body = r.answer.slice(0, r.answer.indexOf("Educational only"));
+    expect(containsNonNeutral(body)).toBeNull();
+    expect(body).toContain("Broad global selloff hits equities as AI trade unwinds");
+    expect(body).toContain("Market brief — Nov 20, 2026 selloff (verified)");
+    expect(body).toContain("Nov 20, 2026");
+    expect(body).toContain("Touches VEQT, VFV, XEQT: 59.2% of your portfolio ($11,352.00).");
+    expect(r.answer).toContain(COACH_DISCLAIMER);
+  });
+
+  it("'you hold' is ordinary neutral wording, not a recommendation", async () => {
+    const { model, calls } = scripted(
+      call("getHoldingNews", { ticker: "AAPL" }),
+      text("You hold AAPL in your non-registered account. Sample: a story covers its upcoming results.")
+    );
+    await runNews("Any news on AAPL?", model);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("asked whether news is good or bad, the fallback opens with the fixed neutrality line", async () => {
+    const { model } = scripted(
+      call("getMarketBrief", {}),
+      text("I can't say whether this is good or bad for you."),
+      text("It isn't good or bad, it's just news.")
+    );
+    const r = await runNews("Is this news good for me?", model);
+    expect(r.answer.startsWith(NEUTRALITY_LINE)).toBe(true);
+    const body = r.answer.slice(0, r.answer.indexOf("Educational only"));
+    expect(containsNonNeutral(body)).toBeNull();
+  });
+
+  it("an answer drawing on a sample story always says sample stories aren't real", async () => {
+    const { model } = scripted(call("getHoldingNews", { ticker: "AAPL" }), text("AAPL reports quarterly results on Jan 28, 2027."));
+    const r = await runNews("When does AAPL report?", model);
+    expect(r.answer).toContain(SAMPLE_NOTE);
+  });
+
+  it("an answer with no sample stories gets no sample note", async () => {
+    const { model } = scripted(call("getMarketBrief", {}), text("A selloff on Nov 20 touches VEQT, VFV and XEQT."));
+    const r = await runNews("What's moving my portfolio?", model);
+    expect(r.answer).not.toContain(SAMPLE_NOTE);
+  });
+
+  it("every story a news tool returned is listed under Sources with its source and date, figures or not", async () => {
+    const { model } = scripted(call("getHoldingNews", { ticker: "AAPL" }), text("There's a sample story about AAPL."));
+    const r = await runNews("Any news on AAPL?", model);
+    expect(r.citations).toContain(
+      "Holding news: [Sample] AAPL heads into earnings season (Sample — illustrative, not real news, Nov 25, 2026)"
+    );
+  });
+
+  it("answers that didn't use news tools are left alone", async () => {
+    const { model, calls } = scripted(call("getPortfolioSummary", {}), text("A strong total: $19,182.00."));
+    await run("How am I doing?", model);
+    expect(calls).toHaveLength(2);
   });
 });
 
